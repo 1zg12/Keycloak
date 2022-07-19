@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 from flask import Flask, g
 from flask_oidc import OpenIDConnect
@@ -14,7 +15,7 @@ app.config.update({
     'SECRET_KEY': 'XlBGtHzPOefRKjiEB9yTcQS0WBHllAcx',
     'TESTING': True,
     'DEBUG': True,
-    'OIDC_CLIENT_SECRETS': 'client_secrets.json',
+    'OIDC_CLIENT_SECRETS': 'auth.json',
     'OIDC_ID_TOKEN_COOKIE_SECURE': False,
     'OIDC_REQUIRE_VERIFIED_EMAIL': False,
     'OIDC_USER_INFO_ENABLED': True,
@@ -24,6 +25,8 @@ app.config.update({
     'OIDC_INTROSPECTION_AUTH_METHOD': 'client_secret_post'
     # 'OIDC_INTROSPECTION_AUTH_METHOD': 'bearer'
 })
+print(os.listdir())
+os.chdir("C:\\Users\\lwpro\\Projects\\KeyCloak2")
 
 oidc = OpenIDConnect(app)
 
@@ -33,57 +36,22 @@ keycloak_openid = KeycloakOpenID(server_url="http://localhost:8080/",
                                  client_secret_key="pww8bSrx1sYC1oLsDkWwj7P2SS6BbpiK")
 
 @app.route('/')
-def hello_world():
-
-    if oidc.user_loggedin:
-        return ('Hello, %s, <a href="/private">See private</a> '
-                '<a href="/logout">Log out</a>') % \
-               oidc.user_getfield('preferred_username')
-    else:
-        return 'Welcome anonymous, <a href="/private">Log in</a>'
-
-
-@app.route('/private')
 @oidc.require_login
-def hello_me():
-    """Example for protected endpoint that extracts private information from the OpenID Connect id_token.
-       Uses the accompanied access_token to access a backend service.
-    """
-
+def protected():
     info = oidc.user_getinfo(['preferred_username', 'email', 'sub'])
-
     username = info.get('preferred_username')
     email = info.get('email')
-    user_id = info.get('sub')
+    sub = info.get('sub')
+    print("""user: %s, email:%s"""%(username, email))
 
-    if user_id in oidc.credentials_store:
-        try:
-
-            access_token = OAuth2Credentials.from_json(oidc.credentials_store[user_id]).access_token
-            print ('access_token=<%s>' % access_token)
-            headers = {'Authorization': 'Bearer %s' % (access_token)}
-            # YOLO
-            greeting = requests.post('http://localhost:5000/api', headers=headers).text
-        except:
-            print ("Could not access greeting-service")
-            greeting = "Hello %s" % username
+    token = oidc.get_access_token()
+    return ("""%s"""%token)
 
 
-    return ("""%s your email is %s and your user_id is %s!
-               <ul>
-                 <li><a href="/">Home</a></li>
-                 <li><a href="//localhost:8080/realms/flask-app/account?referrer=flask-app&referrer_uri=http://localhost:5000/private&">Account</a></li>
-                </ul>""" %
-            (greeting, email, user_id))
-
-
-@app.route('/api', methods=['POST'])
+@app.route('/private', methods=['POST'])
 @oidc.accept_token(require_token=True)
-# @oidc.accept_token(require_token=True, scopes_required=['openid'])
 def hello_api():
-    """OAuth 2.0 protected API endpoint accessible via AccessToken"""
-
-    return json.dumps({'hello': 'Welcome %s' % g.oidc_token_info['sub']})
+    return("""user: %s, email:%s"""%(g.oidc_token_info['username'], g.oidc_token_info['preferred_username']))
 
 
 @app.route('/logout')
